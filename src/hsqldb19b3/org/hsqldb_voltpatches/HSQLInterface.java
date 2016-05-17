@@ -310,16 +310,31 @@ public class HSQLInterface {
 
         try {
             cs = sessionProxy.compileStatement(sql);
-        } catch( HsqlException hex) {
+        }
+        catch (HsqlException hex) {
             // a switch in case we want to give more error details on additional error codes
             switch( hex.getErrorCode()) {
             case -ErrorCode.X_42581:
-                throw new HSQLParseException("SQL Syntax error in \"" + sql + "\" " + hex.getMessage());
+                throw new HSQLParseException(
+                        "SQL Syntax error in \"" + sql + "\" " + hex.getMessage());
             default:
                 throw new HSQLParseException(hex.getMessage());
             }
-        } catch (Throwable t) {
-            throw new HSQLParseException(t.getMessage());
+        }
+        catch (Throwable t) {
+            // Expectable user errors should have been thrown as HSQLException.
+            // So, this throwable should be an unexpected system error.
+            // The details of these arbitrary Throwables are not typically
+            // useful to an end user reading an error message.
+            // They should be logged.
+            m_logger.error("Unexpected error in the SQL parser", t);
+            // The important thing for the end user is that
+            // they be notified that there is a system error involved,
+            // suggesting that it is not their fault -- though they MAY be
+            // able to work around the issue with the help of VoltDB support
+            // (especially if they can provide the log traces).
+            throw new HSQLParseException(
+                    "An unexpected system error was logged by the SQL parser");
         }
 
         //Result result = Result.newPrepareResponse(cs.id, cs.type, rmd, pmd);
@@ -330,18 +345,19 @@ public class HSQLInterface {
 
         VoltXMLElement xml = null;
         xml = cs.voltGetStatementXML(sessionProxy);
-       if (m_logger.isDebugEnabled()) {
-           try {
-               /*
-                * Sometimes exceptions happen.
-                */
-               m_logger.debug(String.format("SQL: %s\n", sql));;
-               m_logger.debug(String.format("HSQLDB:\n%s", (cs == null) ? "<NULL>" : cs.describe(sessionProxy)));
-               m_logger.debug(String.format("VOLTDB:\n%s", (xml == null) ? "<NULL>" : xml));
-           } catch (Exception ex) {
-               System.out.printf("Exception: %s\n", ex.getMessage());
-               ex.printStackTrace(System.out);
-           }
+        if (m_logger.isDebugEnabled()) {
+            try {
+                /*
+                 * Sometimes exceptions happen.
+                 */
+                m_logger.debug(String.format("SQL: %s\n", sql));;
+                m_logger.debug(String.format("HSQLDB:\n%s", (cs == null) ? "<NULL>" : cs.describe(sessionProxy)));
+                m_logger.debug(String.format("VOLTDB:\n%s", (xml == null) ? "<NULL>" : xml));
+            }
+            catch (Exception ex) {
+                System.out.printf("Exception: %s\n", ex.getMessage());
+                ex.printStackTrace(System.out);
+            }
         }
 
         // this releases some small memory hsql uses that builds up over time if not
