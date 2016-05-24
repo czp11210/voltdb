@@ -232,7 +232,6 @@ void CompatibleDRTupleStream::transactionChecks(int64_t lastCommittedSpHandle, i
                 );
     }
 
-    commit(lastCommittedSpHandle, spHandle, uniqueId, false, false);
     if (!m_opened) {
         beginTransaction(m_openSequenceNumber, uniqueId);
     }
@@ -324,6 +323,8 @@ void CompatibleDRTupleStream::beginTransaction(int64_t sequenceNumber, int64_t u
 
      m_uso += io.position();
 
+     m_openUniqueId = uniqueId;
+
      m_opened = true;
 }
 
@@ -385,6 +386,8 @@ void CompatibleDRTupleStream::endTransaction(int64_t uniqueId) {
     m_currBlock->consumed(io.position());
 
     m_uso += io.position();
+
+    m_committedSequenceNumber = m_openSequenceNumber++;
 
     m_opened = false;
 

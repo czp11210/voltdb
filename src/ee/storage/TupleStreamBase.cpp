@@ -47,11 +47,9 @@ TupleStreamBase::TupleStreamBase(int defaultBufferSize, size_t extraHeaderSpace 
       // calls appendTupple with LONG_MIN transaction ids
       // this allows initial ticks to succeed after rejoins
       m_openSpHandle(0),
-      m_openSequenceNumber(-1),
       m_openUniqueId(0),
       m_openTransactionUso(0),
       m_committedSpHandle(0), m_committedUso(0),
-      m_committedSequenceNumber(-1),
       m_committedUniqueId(0),
       m_headerSpace(MAGIC_HEADER_SPACE_FOR_JAVA + extraHeaderSpace)
 {
@@ -99,7 +97,7 @@ void TupleStreamBase::cleanupManagedBuffers()
  * m_openTransactionUso.
  */
 void TupleStreamBase::commit(int64_t lastCommittedSpHandle, int64_t currentSpHandle, int64_t uniqueId,
-        bool sync, bool flush, DREventType eventType)
+        bool sync, bool flush)
 {
     if (currentSpHandle < m_openSpHandle)
     {
@@ -150,24 +148,10 @@ void TupleStreamBase::commit(int64_t lastCommittedSpHandle, int64_t currentSpHan
         //std::cout << "m_openSpHandle(" << m_openSpHandle << ") < currentSpHandle("
         //<< currentSpHandle << ")" << std::endl;
         m_committedUso = m_uso;
-        m_committedSequenceNumber = m_openSequenceNumber;
         m_committedUniqueId = m_openUniqueId;
         // Advance the tip to the new transaction.
         m_committedSpHandle = m_openSpHandle;
         m_openSpHandle = currentSpHandle;
-        m_openSequenceNumber++;
-        m_openUniqueId = uniqueId;
-
-        if (eventType != NOT_A_EVENT) {
-            m_currBlock->startDRSequenceNumber(m_openSequenceNumber);
-            m_currBlock->recordCompletedSequenceNumForDR(m_openSequenceNumber);
-            if (UniqueId::isMpUniqueId(uniqueId)) {
-                m_currBlock->recordCompletedMpTxnForDR(uniqueId);
-            } else {
-                m_currBlock->recordCompletedSpTxnForDR(uniqueId);
-            }
-            m_currBlock->markAsEventBuffer(eventType);
-        }
 
         if (flush) {
             extendBufferChain(0);
@@ -181,7 +165,6 @@ void TupleStreamBase::commit(int64_t lastCommittedSpHandle, int64_t currentSpHan
     {
         //std::cout << "m_openSpHandle(" << m_openSpHandle << ") <= lastCommittedSpHandle(" <<
         //lastCommittedSpHandle << ")" << std::endl;
-        m_committedSequenceNumber = m_openSequenceNumber;
         m_committedUso = m_uso;
         m_committedSpHandle = m_openSpHandle;
         m_committedUniqueId = m_openUniqueId;
@@ -270,7 +253,6 @@ void TupleStreamBase::rollbackTo(size_t mark, size_t)
         }
     }
     if (m_uso == m_committedUso) {
-        m_openSequenceNumber = m_committedSequenceNumber;
         m_openSpHandle = m_committedSpHandle;
         m_openUniqueId = m_committedUniqueId;
     }
@@ -330,21 +312,8 @@ void TupleStreamBase::extendBufferChain(size_t minLength)
     }
 
     if (openTransaction) {
-        size_t partialTxnLength = oldBlock->offset() - oldBlock->lastDRBeginTxnOffset();
-        ::memcpy(m_currBlock->mutableDataPtr(), oldBlock->mutableLastBeginTxnDataPtr(), partialTxnLength);
-        m_currBlock->startDRSequenceNumber(m_openSequenceNumber);
-        m_currBlock->recordLastBeginTxnOffset();
-        m_currBlock->consumed(partialTxnLength);
-        ::memset(oldBlock->mutableLastBeginTxnDataPtr(), 0, partialTxnLength);
-        oldBlock->truncateTo(uso);
-        oldBlock->clearLastBeginTxnOffset();
-        // If the whole previous block has been moved to new block, discards the empty one.
-        if (oldBlock->offset() == 0) {
-            m_pendingBlocks.pop_back();
-            discardBlock(oldBlock);
-        }
+        handleOpenTransaction(oldBlock);
     }
-
 
     pushPendingBlocks();
 }

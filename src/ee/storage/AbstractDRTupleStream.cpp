@@ -24,6 +24,8 @@ using namespace voltdb;
 AbstractDRTupleStream::AbstractDRTupleStream(int partitionId, int defaultBufferSize)
         : TupleStreamBase(defaultBufferSize, MAGIC_DR_TRANSACTION_PADDING),
           m_enabled(true),
+          m_openSequenceNumber(0),
+          m_committedSequenceNumber(-1),
           m_partitionId(partitionId),
           m_secondaryCapacity(SECONDARY_BUFFER_SIZE),
           m_rowTarget(-1),
@@ -69,6 +71,9 @@ void AbstractDRTupleStream::rollbackTo(size_t mark, size_t drRowCost) {
         assert(m_txnRowCount == 0);
         m_opened = false;
     }
+    if (m_uso == m_committedUso) {
+        m_openSequenceNumber = m_committedSequenceNumber;
+    }
     TupleStreamBase::rollbackTo(mark, drRowCost);
 }
 
@@ -76,4 +81,21 @@ void AbstractDRTupleStream::setLastCommittedSequenceNumber(int64_t sequenceNumbe
     assert(m_committedSequenceNumber <= m_openSequenceNumber);
     m_openSequenceNumber = sequenceNumber;
     m_committedSequenceNumber = sequenceNumber;
+}
+
+void AbstractDRTupleStream::handleOpenTransaction(StreamBlock *oldBlock) {
+    size_t uso = m_currBlock->uso();
+    size_t partialTxnLength = oldBlock->offset() - oldBlock->lastDRBeginTxnOffset();
+    ::memcpy(m_currBlock->mutableDataPtr(), oldBlock->mutableLastBeginTxnDataPtr(), partialTxnLength);
+    m_currBlock->startDRSequenceNumber(m_openSequenceNumber);
+    m_currBlock->recordLastBeginTxnOffset();
+    m_currBlock->consumed(partialTxnLength);
+    ::memset(oldBlock->mutableLastBeginTxnDataPtr(), 0, partialTxnLength);
+    oldBlock->truncateTo(uso);
+    oldBlock->clearLastBeginTxnOffset();
+    // If the whole previous block has been moved to new block, discards the empty one.
+    if (oldBlock->offset() == 0) {
+        m_pendingBlocks.pop_back();
+        discardBlock(oldBlock);
+    }
 }

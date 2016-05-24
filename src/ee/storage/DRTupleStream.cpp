@@ -321,7 +321,6 @@ void DRTupleStream::transactionChecks(int64_t lastCommittedSpHandle, int64_t spH
                 );
     }
 
-    commit(lastCommittedSpHandle, spHandle, uniqueId, false, false);
     if (!m_opened) {
         beginTransaction(m_openSequenceNumber, uniqueId);
     }
@@ -418,6 +417,8 @@ void DRTupleStream::beginTransaction(int64_t sequenceNumber, int64_t uniqueId) {
      m_firstParHash = LONG_MAX;
      m_lastParHash = LONG_MAX;
 
+     m_openUniqueId = uniqueId;
+
      m_opened = true;
 }
 
@@ -493,6 +494,8 @@ void DRTupleStream::endTransaction(int64_t uniqueId) {
     extraio.position(txnLength - 4);
     extraio.writeInt(crc);
 
+    m_committedSequenceNumber = m_openSequenceNumber++;
+
     m_opened = false;
 
     size_t bufferRowCount = m_currBlock->updateRowCountForDR(m_txnRowCount);
@@ -541,7 +544,18 @@ void DRTupleStream::generateDREvent(DREventType type, int64_t lastCommittedSpHan
         m_currBlock->consumed(io.position());
         m_uso += io.position();
 
-        commit(lastCommittedSpHandle, spHandle, uniqueId, false, true, type);
+        m_currBlock->startDRSequenceNumber(m_openSequenceNumber);
+        m_currBlock->recordCompletedSequenceNumForDR(m_openSequenceNumber);
+        if (UniqueId::isMpUniqueId(uniqueId)) {
+            m_currBlock->recordCompletedMpTxnForDR(uniqueId);
+        } else {
+            m_currBlock->recordCompletedSpTxnForDR(uniqueId);
+        }
+        m_currBlock->markAsEventBuffer(type);
+
+        extendBufferChain(0);
+
+        pushPendingBlocks();
         break;
     }
     default:

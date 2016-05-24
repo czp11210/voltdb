@@ -76,9 +76,10 @@ public:
 
     virtual bool checkOpenTransaction(StreamBlock *sb, size_t minLength, size_t& blockSize, size_t& uso) { return false; }
 
+    virtual void handleOpenTransaction(StreamBlock *oldBlock) { }
+
     /** Send committed data to the top end. */
-    void commit(int64_t lastCommittedSpHandle, int64_t spHandle, int64_t uniqueId, bool sync, bool flush,
-            DREventType type = NOT_A_EVENT);
+    void commit(int64_t lastCommittedSpHandle, int64_t spHandle, int64_t uniqueId, bool sync, bool flush);
 
     /** time interval between flushing partially filled buffers */
     int64_t m_flushInterval;
@@ -101,8 +102,6 @@ public:
     /** transaction id of the current (possibly uncommitted) transaction */
     int64_t m_openSpHandle;
 
-    int64_t m_openSequenceNumber;
-
     int64_t m_openUniqueId;
 
     /** Universal stream offset when current transaction was opened */
@@ -113,8 +112,6 @@ public:
 
     /** current committed uso */
     size_t m_committedUso;
-
-    int64_t m_committedSequenceNumber;
 
     int64_t m_committedUniqueId;
 

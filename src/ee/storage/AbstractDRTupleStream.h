@@ -92,12 +92,17 @@ public:
 
     virtual bool checkOpenTransaction(StreamBlock *sb, size_t minLength, size_t& blockSize, size_t& uso) = 0;
 
+    void handleOpenTransaction(StreamBlock *oldBlock);
+
     virtual DRCommittedInfo getLastCommittedSequenceNumberAndUniqueIds() = 0;
 
     virtual void generateDREvent(DREventType type, int64_t lastCommittedSpHandle, int64_t spHandle,
                                  int64_t uniqueId, ByteArray payloads) = 0;
 
     bool m_enabled;
+
+    int64_t m_openSequenceNumber;
+    int64_t m_committedSequenceNumber;
 protected:
     CatalogId m_partitionId;
     size_t m_secondaryCapacity;
