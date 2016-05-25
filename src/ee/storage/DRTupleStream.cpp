@@ -61,10 +61,11 @@ size_t DRTupleStream::truncateTable(int64_t lastCommittedSpHandle,
                                     int64_t uniqueId) {
     size_t startingUso = m_uso;
 
+    transactionChecks(lastCommittedSpHandle, spHandle, uniqueId);
+
     //Drop the row, don't move the USO
     if (!m_enabled) return INVALID_DR_MARK;
 
-    transactionChecks(lastCommittedSpHandle, spHandle, uniqueId);
     bool requireHashDelimiter = updateParHash(partitionColumn == -1, LONG_MAX);
 
     if (!m_currBlock) {
@@ -171,14 +172,15 @@ size_t DRTupleStream::appendTuple(int64_t lastCommittedSpHandle,
 {
     size_t startingUso = m_uso;
 
-    //Drop the row, don't move the USO
-    if (!m_enabled) return INVALID_DR_MARK;
-
     size_t rowHeaderSz = 0;
     size_t rowMetadataSz = 0;
     size_t tupleMaxLength = 0;
 
     transactionChecks(lastCommittedSpHandle, spHandle, uniqueId);
+
+    //Drop the row, don't move the USO
+    if (!m_enabled) return INVALID_DR_MARK;
+
     bool requireHashDelimiter = updateParHash(partitionColumn == -1, getParHashForTuple(tuple, partitionColumn));
 
     // Compute the upper bound on bytes required to serialize tuple.
@@ -245,9 +247,6 @@ size_t DRTupleStream::appendUpdateRecord(int64_t lastCommittedSpHandle,
                                          TableTuple &newTuple) {
     size_t startingUso = m_uso;
 
-    //Drop the row, don't move the USO
-    if (!m_enabled) return INVALID_DR_MARK;
-
     size_t oldRowHeaderSz = 0;
     size_t oldRowMetadataSz = 0;
     size_t newRowHeaderSz = 0;
@@ -255,6 +254,10 @@ size_t DRTupleStream::appendUpdateRecord(int64_t lastCommittedSpHandle,
     size_t maxLength = TXN_RECORD_HEADER_SIZE;
 
     transactionChecks(lastCommittedSpHandle, spHandle, uniqueId);
+
+    //Drop the row, don't move the USO
+    if (!m_enabled) return INVALID_DR_MARK;
+
     bool requireHashDelimiter = updateParHash(partitionColumn == -1, getParHashForTuple(oldTuple, partitionColumn));
 
     DRRecordType type = DR_RECORD_UPDATE;
@@ -322,7 +325,14 @@ void DRTupleStream::transactionChecks(int64_t lastCommittedSpHandle, int64_t spH
     }
 
     if (!m_opened) {
-        beginTransaction(m_openSequenceNumber, uniqueId);
+        if (m_enabled) {
+            beginTransaction(m_openSequenceNumber, spHandle, uniqueId);
+        }
+        else {
+            m_openSpHandle = spHandle;
+            m_openUniqueId = uniqueId;
+            m_opened = true;
+        }
     }
     assert(m_opened);
 }
@@ -370,7 +380,7 @@ size_t DRTupleStream::computeOffsets(DRRecordType &type,
     return rowHeaderSz + tuple.maxDRSerializationSize();
 }
 
-void DRTupleStream::beginTransaction(int64_t sequenceNumber, int64_t uniqueId) {
+void DRTupleStream::beginTransaction(int64_t sequenceNumber, int64_t spHandle, int64_t uniqueId) {
     assert(!m_opened);
 
     if (!m_currBlock) {
@@ -417,6 +427,7 @@ void DRTupleStream::beginTransaction(int64_t sequenceNumber, int64_t uniqueId) {
      m_firstParHash = LONG_MAX;
      m_lastParHash = LONG_MAX;
 
+     m_openSpHandle = spHandle;
      m_openUniqueId = uniqueId;
 
      m_opened = true;
@@ -424,6 +435,14 @@ void DRTupleStream::beginTransaction(int64_t sequenceNumber, int64_t uniqueId) {
 
 void DRTupleStream::endTransaction(int64_t uniqueId) {
     if (!m_opened) {
+        return;
+    }
+
+    if (!m_enabled) {
+        m_committedSpHandle = m_openSpHandle;
+        m_committedUniqueId = m_openUniqueId;
+        m_committedSequenceNumber = m_openSequenceNumber++;
+        m_opened = false;
         return;
     }
 
@@ -494,6 +513,9 @@ void DRTupleStream::endTransaction(int64_t uniqueId) {
     extraio.position(txnLength - 4);
     extraio.writeInt(crc);
 
+    m_committedUso = m_uso;
+    m_committedSpHandle = m_openSpHandle;
+    m_committedUniqueId = m_openUniqueId;
     m_committedSequenceNumber = m_openSequenceNumber++;
 
     m_opened = false;
@@ -556,6 +578,8 @@ void DRTupleStream::generateDREvent(DREventType type, int64_t lastCommittedSpHan
         extendBufferChain(0);
 
         pushPendingBlocks();
+
+        m_committedSequenceNumber = m_openSequenceNumber++;
         break;
     }
     default:

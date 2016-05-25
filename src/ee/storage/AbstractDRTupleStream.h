@@ -50,6 +50,9 @@ public:
     /** truncate stream back to mark */
     virtual void rollbackTo(size_t mark, size_t drRowCost);
 
+    virtual void periodicFlush(int64_t timeInMillis,
+                       int64_t lastComittedSpHandle);
+
     virtual void setSecondaryCapacity(size_t capacity);
 
     void setLastCommittedSequenceNumber(int64_t sequenceNumber);
@@ -85,7 +88,7 @@ public:
                        int64_t spHandle,
                        int64_t uniqueId) = 0;
 
-    virtual void beginTransaction(int64_t sequenceNumber, int64_t uniqueId) = 0;
+    virtual void beginTransaction(int64_t sequenceNumber, int64_t spHandle, int64_t uniqueId) = 0;
     // If a transaction didn't generate any binary log data, calling this
     // would be a no-op because it was never begun.
     virtual void endTransaction(int64_t uniqueId) = 0;

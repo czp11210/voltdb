@@ -56,10 +56,10 @@ size_t CompatibleDRTupleStream::truncateTable(int64_t lastCommittedSpHandle,
                                               int64_t uniqueId) {
     size_t startingUso = m_uso;
 
+    transactionChecks(lastCommittedSpHandle, spHandle, uniqueId);
+
     //Drop the row, don't move the USO
     if (!m_enabled) return INVALID_DR_MARK;
-
-    transactionChecks(lastCommittedSpHandle, spHandle, uniqueId);
 
     if (!m_currBlock) {
         extendBufferChain(m_defaultCapacity);
@@ -114,14 +114,14 @@ size_t CompatibleDRTupleStream::appendTuple(int64_t lastCommittedSpHandle,
 {
     size_t startingUso = m_uso;
 
-    //Drop the row, don't move the USO
-    if (!m_enabled) return INVALID_DR_MARK;
-
     size_t rowHeaderSz = 0;
     size_t rowMetadataSz = 0;
     size_t tupleMaxLength = 0;
 
     transactionChecks(lastCommittedSpHandle, spHandle, uniqueId);
+
+    //Drop the row, don't move the USO
+    if (!m_enabled) return INVALID_DR_MARK;
 
     // Compute the upper bound on bytes required to serialize tuple.
     // exportxxx: can memoize this calculation.
@@ -170,9 +170,6 @@ size_t CompatibleDRTupleStream::appendUpdateRecord(int64_t lastCommittedSpHandle
                                                      TableTuple &newTuple) {
     size_t startingUso = m_uso;
 
-    //Drop the row, don't move the USO
-    if (!m_enabled) return INVALID_DR_MARK;
-
     size_t oldRowHeaderSz = 0;
     size_t oldRowMetadataSz = 0;
     size_t newRowHeaderSz = 0;
@@ -180,6 +177,9 @@ size_t CompatibleDRTupleStream::appendUpdateRecord(int64_t lastCommittedSpHandle
     size_t maxLength = TXN_RECORD_HEADER_SIZE;
 
     transactionChecks(lastCommittedSpHandle, spHandle, uniqueId);
+
+    //Drop the row, don't move the USO
+    if (!m_enabled) return INVALID_DR_MARK;
 
     DRRecordType type = DR_RECORD_UPDATE;
     maxLength += computeOffsets(type, oldTuple, oldRowHeaderSz, oldRowMetadataSz);
@@ -233,7 +233,14 @@ void CompatibleDRTupleStream::transactionChecks(int64_t lastCommittedSpHandle, i
     }
 
     if (!m_opened) {
-        beginTransaction(m_openSequenceNumber, uniqueId);
+        if (m_enabled) {
+            beginTransaction(m_openSequenceNumber, spHandle, uniqueId);
+        }
+        else {
+            m_openSpHandle = spHandle;
+            m_openUniqueId = uniqueId;
+            m_opened = true;
+        }
     }
     assert(m_opened);
 }
@@ -281,7 +288,7 @@ size_t CompatibleDRTupleStream::computeOffsets(DRRecordType &type,
     return rowHeaderSz + tuple.maxDRSerializationSize();
 }
 
-void CompatibleDRTupleStream::beginTransaction(int64_t sequenceNumber, int64_t uniqueId) {
+void CompatibleDRTupleStream::beginTransaction(int64_t sequenceNumber, int64_t spHandle, int64_t uniqueId) {
     assert(!m_opened);
 
     if (!m_currBlock) {
@@ -323,6 +330,7 @@ void CompatibleDRTupleStream::beginTransaction(int64_t sequenceNumber, int64_t u
 
      m_uso += io.position();
 
+     m_openSpHandle = spHandle;
      m_openUniqueId = uniqueId;
 
      m_opened = true;
@@ -330,6 +338,14 @@ void CompatibleDRTupleStream::beginTransaction(int64_t sequenceNumber, int64_t u
 
 void CompatibleDRTupleStream::endTransaction(int64_t uniqueId) {
     if (!m_opened) {
+        return;
+    }
+
+    if (!m_enabled) {
+        m_committedSpHandle = m_openSpHandle;
+        m_committedUniqueId = m_openUniqueId;
+        m_committedSequenceNumber = m_openSequenceNumber++;
+        m_opened = false;
         return;
     }
 
@@ -387,6 +403,9 @@ void CompatibleDRTupleStream::endTransaction(int64_t uniqueId) {
 
     m_uso += io.position();
 
+    m_committedUso = m_uso;
+    m_committedSpHandle = m_openSpHandle;
+    m_committedUniqueId = m_openUniqueId;
     m_committedSequenceNumber = m_openSequenceNumber++;
 
     m_opened = false;

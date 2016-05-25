@@ -152,6 +152,7 @@ void TupleStreamBase::commit(int64_t lastCommittedSpHandle, int64_t currentSpHan
         // Advance the tip to the new transaction.
         m_committedSpHandle = m_openSpHandle;
         m_openSpHandle = currentSpHandle;
+        m_openUniqueId = uniqueId;
 
         if (flush) {
             extendBufferChain(0);

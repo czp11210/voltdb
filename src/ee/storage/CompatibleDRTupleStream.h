@@ -71,7 +71,7 @@ public:
                        int64_t spHandle,
                        int64_t uniqueId);
 
-    virtual void beginTransaction(int64_t sequenceNumber, int64_t uniqueId);
+    virtual void beginTransaction(int64_t sequenceNumber, int64_t spHandle, int64_t uniqueId);
     // If a transaction didn't generate any binary log data, calling this
     // would be a no-op because it was never begun.
     virtual void endTransaction(int64_t uniqueId);

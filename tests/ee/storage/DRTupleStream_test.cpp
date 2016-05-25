@@ -676,7 +676,8 @@ TEST_F(DRTupleStreamTest, RollbackEmptyTransaction)
     EXPECT_EQ(mark1, INVALID_DR_MARK);
     EXPECT_EQ(mark2, INVALID_DR_MARK);
     EXPECT_EQ(expectedSequenceNumber, m_wrapper.m_openSequenceNumber);
-    EXPECT_EQ(expectedUniqueId, m_wrapper.m_openUniqueId);
+    // openUniqueId should have been updated with the tuple corresponding to mark1
+    EXPECT_EQ(addPartitionId(11), m_wrapper.m_openUniqueId);
 
     m_wrapper.rollbackTo(mark2, rowCostForDRRecord(DR_RECORD_INSERT));
     m_wrapper.rollbackTo(mark1, rowCostForDRRecord(DR_RECORD_INSERT));

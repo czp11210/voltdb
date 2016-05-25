@@ -58,6 +58,9 @@ void AbstractDRTupleStream::pushExportBuffer(StreamBlock *block, bool sync, bool
 // consider the transaction being rolled back as open.
 void AbstractDRTupleStream::rollbackTo(size_t mark, size_t drRowCost) {
     if (mark == INVALID_DR_MARK) {
+        m_openSpHandle = m_committedSpHandle;
+        m_openUniqueId = m_committedUniqueId;
+        m_opened = false;
         return;
     }
     if (drRowCost <= m_txnRowCount) {
@@ -75,6 +78,41 @@ void AbstractDRTupleStream::rollbackTo(size_t mark, size_t drRowCost) {
         m_openSequenceNumber = m_committedSequenceNumber;
     }
     TupleStreamBase::rollbackTo(mark, drRowCost);
+}
+
+void
+AbstractDRTupleStream::periodicFlush(int64_t timeInMillis,
+                                        int64_t lastCommittedSpHandle)
+{
+    // negative timeInMillis instructs a mandatory flush
+    if (timeInMillis < 0 || (m_flushInterval > 0 && timeInMillis - m_lastFlush > m_flushInterval)) {
+        int64_t currentSpHandle = std::max(m_openSpHandle, lastCommittedSpHandle);
+        if (timeInMillis > 0) {
+            m_lastFlush = timeInMillis;
+        }
+
+        if (currentSpHandle < m_openSpHandle)
+        {
+            throwFatalException(
+                    "Active transactions moving backwards: openSpHandle is %jd, while the current spHandle is %jd",
+                    (intmax_t)m_openSpHandle, (intmax_t)currentSpHandle
+                    );
+        }
+
+        // more data for an ongoing transaction with no new committed data
+        if ((currentSpHandle == m_openSpHandle) &&
+                (lastCommittedSpHandle == m_committedSpHandle)) {
+            extendBufferChain(0);
+            return;
+        }
+
+        // the open transaction should be committed
+        if (m_openSpHandle <= lastCommittedSpHandle) {
+            extendBufferChain(0);
+        }
+
+        pushPendingBlocks();
+    }
 }
 
 void AbstractDRTupleStream::setLastCommittedSequenceNumber(int64_t sequenceNumber) {

@@ -67,8 +67,8 @@ public:
     virtual void rollbackTo(size_t mark, size_t drRowCost);
 
     /** age out committed data */
-    void periodicFlush(int64_t timeInMillis,
-                       int64_t lastComittedSpHandle);
+    virtual void periodicFlush(int64_t timeInMillis,
+                               int64_t lastComittedSpHandle);
 
     virtual void extendBufferChain(size_t minLength);
     void pushPendingBlocks();
