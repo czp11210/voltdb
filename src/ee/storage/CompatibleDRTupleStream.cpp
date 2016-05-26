@@ -233,6 +233,8 @@ void CompatibleDRTupleStream::transactionChecks(int64_t lastCommittedSpHandle, i
     }
 
     if (!m_opened) {
+        ++m_openSequenceNumber;
+
         if (m_enabled) {
             beginTransaction(m_openSequenceNumber, spHandle, uniqueId);
         }
@@ -406,7 +408,7 @@ void CompatibleDRTupleStream::endTransaction(int64_t uniqueId) {
     m_committedUso = m_uso;
     m_committedSpHandle = m_openSpHandle;
     m_committedUniqueId = m_openUniqueId;
-    m_committedSequenceNumber = m_openSequenceNumber++;
+    m_committedSequenceNumber = m_openSequenceNumber;
 
     m_opened = false;
 

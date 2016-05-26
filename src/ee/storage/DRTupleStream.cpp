@@ -325,6 +325,8 @@ void DRTupleStream::transactionChecks(int64_t lastCommittedSpHandle, int64_t spH
     }
 
     if (!m_opened) {
+        ++m_openSequenceNumber;
+
         if (m_enabled) {
             beginTransaction(m_openSequenceNumber, spHandle, uniqueId);
         }
@@ -516,7 +518,7 @@ void DRTupleStream::endTransaction(int64_t uniqueId) {
     m_committedUso = m_uso;
     m_committedSpHandle = m_openSpHandle;
     m_committedUniqueId = m_openUniqueId;
-    m_committedSequenceNumber = m_openSequenceNumber++;
+    m_committedSequenceNumber = m_openSequenceNumber;
 
     m_opened = false;
 
@@ -559,6 +561,13 @@ void DRTupleStream::generateDREvent(DREventType type, int64_t lastCommittedSpHan
         int64_t uniqueId, ByteArray payloads) {
     switch (type) {
     case CATALOG_UPDATE: {
+        if (!m_enabled) {
+            m_committedSequenceNumber = ++m_openSequenceNumber;
+            return;
+        }
+
+        ++m_openSequenceNumber;
+
         // Make sure current block is empty
         extendBufferChain(0);
         ExportSerializeOutput io(m_currBlock->mutableDataPtr(), m_currBlock->remaining());
@@ -579,7 +588,7 @@ void DRTupleStream::generateDREvent(DREventType type, int64_t lastCommittedSpHan
 
         pushPendingBlocks();
 
-        m_committedSequenceNumber = m_openSequenceNumber++;
+        m_committedSequenceNumber = m_openSequenceNumber;
         break;
     }
     default:
