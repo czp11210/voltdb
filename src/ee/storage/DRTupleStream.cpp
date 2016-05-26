@@ -59,6 +59,8 @@ size_t DRTupleStream::truncateTable(int64_t lastCommittedSpHandle,
                                     int partitionColumn,
                                     int64_t spHandle,
                                     int64_t uniqueId) {
+    if (m_guarded) return INVALID_DR_MARK;
+
     size_t startingUso = m_uso;
 
     transactionChecks(lastCommittedSpHandle, spHandle, uniqueId);
@@ -170,6 +172,8 @@ size_t DRTupleStream::appendTuple(int64_t lastCommittedSpHandle,
                                   TableTuple &tuple,
                                   DRRecordType type)
 {
+    if (m_guarded) return INVALID_DR_MARK;
+
     size_t startingUso = m_uso;
 
     size_t rowHeaderSz = 0;
@@ -245,6 +249,8 @@ size_t DRTupleStream::appendUpdateRecord(int64_t lastCommittedSpHandle,
                                          int64_t uniqueId,
                                          TableTuple &oldTuple,
                                          TableTuple &newTuple) {
+    if (m_guarded) return INVALID_DR_MARK;
+
     size_t startingUso = m_uso;
 
     size_t oldRowHeaderSz = 0;
@@ -443,7 +449,7 @@ void DRTupleStream::endTransaction(int64_t uniqueId) {
     if (!m_enabled) {
         m_committedSpHandle = m_openSpHandle;
         m_committedUniqueId = m_openUniqueId;
-        m_committedSequenceNumber = m_openSequenceNumber++;
+        m_committedSequenceNumber = m_openSequenceNumber;
         m_opened = false;
         return;
     }

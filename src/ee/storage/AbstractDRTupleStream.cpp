@@ -24,6 +24,7 @@ using namespace voltdb;
 AbstractDRTupleStream::AbstractDRTupleStream(int partitionId, int defaultBufferSize)
         : TupleStreamBase(defaultBufferSize, MAGIC_DR_TRANSACTION_PADDING),
           m_enabled(true),
+          m_guarded(false),
           m_openSequenceNumber(-1),
           m_committedSequenceNumber(-1),
           m_partitionId(partitionId),

@@ -103,6 +103,7 @@ public:
                                  int64_t uniqueId, ByteArray payloads) = 0;
 
     bool m_enabled;
+    bool m_guarded; // strongest guard, reject all actions for DRTupleStream
 
     int64_t m_openSequenceNumber;
     int64_t m_committedSequenceNumber;
@@ -117,31 +118,32 @@ protected:
 class DRTupleStreamDisableGuard {
 public:
     DRTupleStreamDisableGuard(ExecutorContext *ec, bool ignore) :
-            m_drStream(ec->drStream()), m_drReplicatedStream(ec->drReplicatedStream()), m_drStreamOldValue(ec->drStream()->m_enabled),
-            m_drReplicatedStreamOldValue(m_drReplicatedStream?m_drReplicatedStream->m_enabled:false)
+            m_drStream(ec->drStream()), m_drReplicatedStream(ec->drReplicatedStream()), m_drStreamOldValue(ec->drStream()->m_guarded),
+            m_drReplicatedStreamOldValue(m_drReplicatedStream?m_drReplicatedStream->m_guarded:true)
     {
         if (!ignore) {
             setGuard();
         }
     }
     DRTupleStreamDisableGuard(ExecutorContext *ec) :
-            m_drStream(ec->drStream()), m_drReplicatedStream(ec->drReplicatedStream()), m_drStreamOldValue(ec->drStream()->m_enabled),
-            m_drReplicatedStreamOldValue(m_drReplicatedStream?m_drReplicatedStream->m_enabled:false)
+            m_drStream(ec->drStream()), m_drReplicatedStream(ec->drReplicatedStream()), m_drStreamOldValue(ec->drStream()->m_guarded),
+            m_drReplicatedStreamOldValue(m_drReplicatedStream?m_drReplicatedStream->m_guarded:true)
     {
         setGuard();
     }
     ~DRTupleStreamDisableGuard() {
-        m_drStream->m_enabled = m_drStreamOldValue;
+        m_drStream->m_guarded = m_drStreamOldValue;
         if (m_drReplicatedStream) {
-            m_drReplicatedStream->m_enabled = m_drReplicatedStreamOldValue;
+            m_drReplicatedStream->m_guarded = m_drReplicatedStreamOldValue;
         }
     }
 
 private:
     inline void setGuard() {
-        m_drStream->m_enabled = false;
+        std::cout << "setGuard" << std::endl;
+        m_drStream->m_guarded = true;
         if (m_drReplicatedStream) {
-            m_drReplicatedStream->m_enabled = false;
+            m_drReplicatedStream->m_guarded = true;
         }
     }
 
