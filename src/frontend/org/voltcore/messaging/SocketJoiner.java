@@ -195,6 +195,9 @@ public class SocketJoiner {
                     try { Thread.sleep(TimeUnit.SECONDS.toMillis(retryInterval)); } catch (InterruptedException e1) {}
                     // exponential back off with a salt to avoid collision. Max is 5 minutes.
                     retryInterval = Math.min(retryInterval * 2, TimeUnit.MINUTES.toSeconds(5)) + salt.nextInt(30);
+                } catch (Exception e) {
+                    hostLog.error("Failed to establish socket mesh.", e);
+                    throw new RuntimeException(e);
                 }
             }
         }
@@ -493,7 +496,8 @@ public class SocketJoiner {
      * it must connect to the leader which will generate a host id and
      * advertise the rest of the cluster so that connectToPrimary can connect to it
      */
-    private void connectToPrimary() throws CoreUtils.RetryException {
+    private void connectToPrimary() throws Exception
+    {
         // collect clock skews from all nodes
         List<Long> skews = new ArrayList<Long>();
 
@@ -697,9 +701,6 @@ public class SocketJoiner {
             m_joinHandler.notifyOfHosts( m_localHostId, hostIds, hostSockets, listeningAddresses);
         } catch (ClosedByInterruptException e) {
             //This is how shutdown is done
-        } catch (Exception e) {
-            hostLog.error("Failed to establish socket mesh.", e);
-            throw new RuntimeException(e);
         }
     }
 
