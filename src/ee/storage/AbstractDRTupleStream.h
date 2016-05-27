@@ -140,7 +140,6 @@ public:
 
 private:
     inline void setGuard() {
-        std::cout << "setGuard" << std::endl;
         m_drStream->m_guarded = true;
         if (m_drReplicatedStream) {
             m_drReplicatedStream->m_guarded = true;

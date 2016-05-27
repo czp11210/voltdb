@@ -61,6 +61,7 @@ void AbstractDRTupleStream::rollbackTo(size_t mark, size_t drRowCost) {
     if (mark == INVALID_DR_MARK) {
         m_openSpHandle = m_committedSpHandle;
         m_openUniqueId = m_committedUniqueId;
+        m_openSequenceNumber = m_committedSequenceNumber;
         m_opened = false;
         return;
     }
@@ -73,10 +74,8 @@ void AbstractDRTupleStream::rollbackTo(size_t mark, size_t drRowCost) {
     }
     if (mark == m_committedUso) {
         assert(m_txnRowCount == 0);
-        m_opened = false;
-    }
-    if (m_uso == m_committedUso) {
         m_openSequenceNumber = m_committedSequenceNumber;
+        m_opened = false;
     }
     TupleStreamBase::rollbackTo(mark, drRowCost);
 }
